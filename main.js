@@ -1,4 +1,4 @@
-        // --- Translations ---
+// --- Translations ---
         const translations = {
             en: {
                 pageTitle: "NameCraft.js - Variable Name Generator",
@@ -16,7 +16,8 @@
                 editOutputButtonLabel: "Edit {convention} name", // Placeholder for convention
                 copyOutputButtonLabel: "Copy {convention} name", // Placeholder for convention
                 copiedFeedback: "Copied!",
-                errorFeedback: "Error!"
+                errorFeedback: "Error!",
+                dragHandleLabel: "Drag to reorder" // Added for drag handle
             },
             pl: {
                 pageTitle: "NameCraft.js - Generator Nazw Zmiennych",
@@ -34,11 +35,18 @@
                 editOutputButtonLabel: "Edytuj nazwę {convention}",
                 copyOutputButtonLabel: "Kopiuj nazwę {convention}",
                 copiedFeedback: "Skopiowano!",
-                errorFeedback: "Błąd!"
+                errorFeedback: "Błąd!",
+                dragHandleLabel: "Przeciągnij, aby zmienić kolejność" // Added for drag handle
             }
         };
 
         let currentLanguage = 'en'; // Default language
+
+        // --- LocalStorage Keys ---
+        const LS_LANG_KEY = 'nameCraftLang';
+        const LS_FORMAT_KEY = 'nameCraftFormat';
+        const LS_ORDER_KEY = 'nameCraftOrder';
+
 
         /**
          * Updates the UI text elements based on the selected language.
@@ -54,29 +62,39 @@
 
                 if (translation !== undefined) {
                     if (element.hasAttribute('placeholder')) {
-                        element.setAttribute('placeholder', translation);
+                        // Avoid overwriting placeholder if input has value or is loading
+                        if (!element.value.trim() || element.placeholder === translations.en.inputPlaceholderLoading || element.placeholder === translations.pl.inputPlaceholderLoading) {
+                             element.setAttribute('placeholder', translation);
+                        }
                     } else if (element.hasAttribute('aria-label')) {
                         // Handle dynamic aria-labels for output buttons
-                        if (key === 'editOutputButtonLabel' || key === 'copyOutputButtonLabel') {
-                            const convention = element.closest('.flex').querySelector('span.w-28')?.textContent?.replace(':', '') || 'name';
+                        if (key === 'editOutputButtonLabel' || key === 'copyOutputButtonLabel' || key === 'dragHandleLabel') {
+                            // Use data-convention attribute stored on the button itself or find it
+                             const convention = element.dataset.convention || element.closest('.draggable-row')?.querySelector('[data-convention]')?.dataset.convention || 'item';
                             element.setAttribute('aria-label', translation.replace('{convention}', convention));
                         } else {
-                            element.setAttribute('aria-label', translation);
+                             element.setAttribute('aria-label', translation);
                         }
                     } else if (element.tagName === 'TITLE') {
                          document.title = translation; // Set page title
                     }
                     else {
-                        element.textContent = translation;
+                        // Avoid translating the convention label itself if it has the key
+                        if(!element.classList.contains('convention-label')) {
+                             element.textContent = translation;
+                        }
                     }
                 } else {
-                    console.warn(`Translation key "${key}" not found for language "${lang}"`);
+                     // Only warn if the key exists in the default language (English)
+                    if (translations.en[key]) {
+                        console.warn(`Translation key "${key}" not found for language "${lang}"`);
+                    }
                 }
             });
 
-             // Update dynamic placeholder for input text if needed
+             // Update dynamic placeholder for input text if needed (redundant with check above, but safe)
             const inputTextElement = document.getElementById('inputText');
-            if (!inputTextElement.value.trim() && inputTextElement.placeholder !== translations[lang].inputPlaceholderLoading) {
+            if (inputTextElement && !inputTextElement.value.trim() && inputTextElement.placeholder !== translations[lang].inputPlaceholderLoading) {
                 inputTextElement.placeholder = translations[lang].inputPlaceholderDefault;
             }
         }
@@ -174,12 +192,17 @@
                 throw new Error("Method 'generate()' must be implemented.");
             }
 
-            // Updated createHtml to use data-translate-key for aria-labels
+            // Updated createHtml to include draggable attribute and drag handle
             createHtml() {
+                 // Note: Added draggable="true", class="draggable-row", and the drag-handle span
+                 // Added unique ID to the row itself: id="row-${this.id}"
                  return `
-                    <div class="flex items-center justify-between bg-gray-50 p-3 rounded-md border border-gray-200 shadow-sm">
+                    <div id="row-${this.id}" class="draggable-row flex items-center justify-between bg-gray-50 p-3 rounded-md border border-gray-200 shadow-sm" draggable="true">
                         <div class="flex items-center flex-grow min-w-0 mr-2">
-                            <span class="font-medium text-gray-700 w-28 flex-shrink-0">${this.label}:</span>
+                            <span class="drag-handle cursor-move text-gray-400 mr-2 hover:text-gray-600"
+                                  data-translate-key="dragHandleLabel"
+                                  aria-label="Drag to reorder">⠿</span>
+                            <span class="font-medium text-gray-700 w-28 flex-shrink-0 convention-label">${this.label}:</span>
                             <code id="${this.id}" class="text-gray-800 bg-gray-200 px-2 py-1 rounded text-sm break-all ml-2 flex-grow" spellcheck="false">...</code>
                         </div>
                         <div class="button-container flex-shrink-0 ml-2">
@@ -195,6 +218,7 @@
                             <div class="copy-button-container" data-feedback-key="copiedFeedback" data-error-key="errorFeedback">
                                 <button class="copyButton p-1 text-gray-500 hover:text-green-600 transition duration-150"
                                         data-target="${this.id}"
+                                        data-convention="${this.label}" /* Added data-convention here too */
                                         data-translate-key="copyOutputButtonLabel"
                                         aria-label="Copy ${this.label} name">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -259,8 +283,11 @@
             // --- State ---
             let isEditing = false;
             let currentEditTarget = null;
+            let draggedElement = null; // Keep track of the element being dragged
+            let placeholderElement = null; // Reference to the drop placeholder
 
             // --- List of Generator Instances ---
+            // NOTE: The order here defines the *default* order if nothing is saved
             const generators = [
                 new CamelCaseGenerator('outputCamelCase', 'camelCase'),
                 new PascalCaseGenerator('outputPascalCase', 'PascalCase'),
@@ -270,11 +297,88 @@
             ];
 
             // --- Initialize UI ---
+            // Create elements based on default generator order FIRST
             generators.forEach(generator => {
                 outputContainer.insertAdjacentHTML('beforeend', generator.createHtml());
             });
-            // Set initial UI text based on default language
-            updateUI(currentLanguage);
+            // Create placeholder element (but don't append yet)
+            placeholderElement = document.createElement('div');
+            placeholderElement.className = 'drop-placeholder';
+
+            // --- Persistence Functions ---
+            function saveLanguage(lang) {
+                try {
+                    localStorage.setItem(LS_LANG_KEY, lang);
+                } catch (e) { console.error("LocalStorage Error:", e); }
+            }
+            function saveFormattingOption(formatValue) {
+                 try {
+                    localStorage.setItem(LS_FORMAT_KEY, formatValue);
+                 } catch (e) { console.error("LocalStorage Error:", e); }
+            }
+            function saveRowOrder() {
+                 try {
+                    const rows = outputContainer.querySelectorAll('.draggable-row');
+                    const currentOrder = Array.from(rows).map(row => row.id); // Store array of row IDs
+                    localStorage.setItem(LS_ORDER_KEY, JSON.stringify(currentOrder));
+                 } catch (e) { console.error("LocalStorage Error:", e); }
+            }
+
+            function loadSettingsAndApply() {
+                let initialLang = 'en'; // Default language
+                // Load Language
+                try {
+                    const savedLang = localStorage.getItem(LS_LANG_KEY);
+                    if (savedLang && translations[savedLang]) {
+                        initialLang = savedLang;
+                        languageSelector.value = savedLang;
+                    }
+                } catch (e) { console.error("LocalStorage Error:", e); }
+
+                // Apply loaded language to UI FIRST
+                updateUI(initialLang);
+
+                // Load Formatting Option
+                 try {
+                    const savedFormat = localStorage.getItem(LS_FORMAT_KEY);
+                    if (savedFormat) {
+                        const radioToSelect = formattingOptionsContainer.querySelector(`input[name="formatting"][value="${savedFormat}"]`);
+                        if (radioToSelect) {
+                            radioToSelect.checked = true;
+                        }
+                    }
+                } catch (e) { console.error("LocalStorage Error:", e); }
+
+
+                // Load and Apply Row Order
+                 try {
+                    const savedOrderJSON = localStorage.getItem(LS_ORDER_KEY);
+                    if (savedOrderJSON) {
+                        const savedOrder = JSON.parse(savedOrderJSON);
+                        if (Array.isArray(savedOrder)) {
+                            // Re-append elements in the saved order
+                            // Ensure the heading stays first
+                            const heading = outputContainer.querySelector('h2');
+                            if(heading) outputContainer.appendChild(heading);
+
+                            savedOrder.forEach(rowId => {
+                                const rowElement = document.getElementById(rowId);
+                                if (rowElement) {
+                                    outputContainer.appendChild(rowElement); // Appending moves the element
+                                } else {
+                                    console.warn(`Saved row ID "${rowId}" not found in DOM.`);
+                                }
+                            });
+                        }
+                    }
+                 } catch (e) {
+                    console.error("Error parsing or applying saved row order:", e);
+                    localStorage.removeItem(LS_ORDER_KEY); // Clear invalid data
+                 }
+            }
+
+            // --- Load settings and apply them ---
+            loadSettingsAndApply();
 
 
              /**
@@ -310,11 +414,12 @@
                             outputElement.textContent = applyFormatting(baseName, selectedFormat);
                         }
                     } else {
-                        console.error(`Output element not found for ID: ${generator.id}`);
+                        // Element might not exist yet if called during init, ignore error
+                        // console.error(`Output element not found for ID: ${generator.id}`);
                     }
                 });
                  // Ensure dynamic aria-labels are also updated after potential regeneration
-                 updateUI(currentLanguage); // Re-run UI update for labels
+                 updateUI(currentLanguage);
              }
 
             function handleEditFinish() {
@@ -322,7 +427,8 @@
 
                 const editedValue = currentEditTarget.textContent;
                 const convention = currentEditTarget.dataset.convention ||
-                                   currentEditTarget.closest('.flex').querySelector('.editButton')?.dataset.convention;
+                                   currentEditTarget.closest('.draggable-row').querySelector('.editButton')?.dataset.convention;
+
 
                 const originalInputValue = inputTextElement.value;
                 const selectedFormat = getSelectedFormatValue(); // Get format *before* potential change
@@ -498,6 +604,7 @@
                         console.error('Datamuse API did not return expected array or enough words:', data);
                     }
                     // Regenerate outputs and update UI text (including placeholder)
+                    // This will now use the loaded settings (format, lang)
                     regenerateAllOutputs();
                 })
                 .catch(error => {
@@ -511,24 +618,128 @@
                     } else {
                         console.error('Full error object:', error);
                     }
-                    // Regenerate to clear placeholder and apply default lang text
+                    // Regenerate to clear placeholder and apply default lang text & loaded settings
                     regenerateAllOutputs();
                 });
 
 
-            // --- Attach Event Listeners ---
+            // --- Drag and Drop Logic ---
+
+            /** Removes the placeholder element from the DOM */
+            function removePlaceholder() {
+                if (placeholderElement && placeholderElement.parentNode) {
+                    placeholderElement.parentNode.removeChild(placeholderElement);
+                }
+            }
+
+            /**
+             * Finds the element after which the dragged element should be placed.
+             * @param {HTMLElement} container - The container element.
+             * @param {number} y - The vertical mouse coordinate.
+             * @returns {HTMLElement|null} The element to insert before, or null to append.
+             */
+            function getDragAfterElement(container, y) {
+                // Select only direct children rows within the container, excluding the placeholder and the element being dragged
+                const draggableElements = [...container.querySelectorAll(':scope > .draggable-row:not(.dragging)')];
+
+                return draggableElements.reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = y - box.top - box.height / 2;
+                    if (offset < 0 && offset > closest.offset) {
+                        return { offset: offset, element: child };
+                    } else {
+                        return closest;
+                    }
+                }, { offset: Number.NEGATIVE_INFINITY }).element;
+            }
+
+            // Add Drag and Drop event listeners using delegation on the container
+            outputContainer.addEventListener('dragstart', (event) => {
+                 const targetRow = event.target.closest('.draggable-row');
+                 if (!targetRow) return;
+
+                 draggedElement = targetRow;
+                 setTimeout(() => {
+                    if (draggedElement) draggedElement.classList.add('dragging');
+                 }, 0);
+                 event.dataTransfer.setData('text/plain', targetRow.id || 'dragging-element');
+                 event.dataTransfer.effectAllowed = 'move';
+            });
+
+            outputContainer.addEventListener('dragend', () => {
+                if (draggedElement) {
+                    draggedElement.classList.remove('dragging');
+                    draggedElement = null;
+                }
+                removePlaceholder(); // Ensure placeholder is removed on drag end/cancel
+            });
+
+            outputContainer.addEventListener('dragover', (event) => {
+                 event.preventDefault();
+                 event.dataTransfer.dropEffect = 'move';
+
+                 const afterElement = getDragAfterElement(outputContainer, event.clientY);
+
+                 if (afterElement == null) {
+                     if (outputContainer.lastElementChild !== placeholderElement) {
+                         outputContainer.appendChild(placeholderElement);
+                     }
+                 } else {
+                     if (placeholderElement.nextSibling !== afterElement) {
+                        outputContainer.insertBefore(placeholderElement, afterElement);
+                     }
+                 }
+            });
+
+             outputContainer.addEventListener('dragenter', (event) => {
+                 const related = event.relatedTarget;
+                 const container = event.currentTarget;
+                 if (!related || !container.contains(related)) {
+                    event.preventDefault();
+                 }
+             });
+
+             outputContainer.addEventListener('dragleave', (event) => {
+                 const related = event.relatedTarget;
+                 const container = event.currentTarget;
+                 if (!related || !container.contains(related)) {
+                    removePlaceholder();
+                 }
+             });
+
+
+            outputContainer.addEventListener('drop', (event) => {
+                event.preventDefault();
+                removePlaceholder();
+
+                if (!draggedElement) return;
+
+                const afterElement = getDragAfterElement(outputContainer, event.clientY);
+
+                if (afterElement == null) {
+                    outputContainer.appendChild(draggedElement);
+                } else {
+                    outputContainer.insertBefore(draggedElement, afterElement);
+                }
+                saveRowOrder(); // Save the new order after dropping
+            });
+
+
+            // --- Attach Other Event Listeners ---
             // Edit input button listener
             editInputButton.addEventListener('click', () => {
                 inputTextElement.focus(); // Set focus first
                 inputTextElement.select(); // Then select all text
             });
 
-            // Output container listener (copy/edit)
-            outputContainer.addEventListener('click', handleOutputContainerClick); // Delegation
+            // Output container listener (copy/edit) - already attached via delegation
+            outputContainer.addEventListener('click', handleOutputContainerClick);
 
             // Formatting options listener
             formattingOptionsContainer.addEventListener('change', (event) => {
                 if (event.target.type === 'radio' && event.target.name === 'formatting') {
+                    const selectedFormat = event.target.value;
+                    saveFormattingOption(selectedFormat); // Save new format
                     regenerateAllOutputs();
                 }
             });
@@ -548,11 +759,13 @@
 
             // Language selector listener
             languageSelector.addEventListener('change', (event) => {
-                updateUI(event.target.value);
-                // Optional: Re-generate outputs if language affects formatting/parsing (not currently the case)
+                const newLang = event.target.value;
+                saveLanguage(newLang); // Save new language
+                updateUI(newLang);
                  regenerateAllOutputs(); // Ensure placeholders/aria-labels are updated
             });
 
-            // Initial generation call is now handled within the .then() or .catch() of the fetch
+            // Note: Initial generation call is handled within the .then() or .catch() of the fetch
+            // after settings have been loaded and applied by loadSettingsAndApply().
 
         });
