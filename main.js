@@ -1,4 +1,3 @@
-<script>
         // --- Translations ---
         const translations = {
             en: {
