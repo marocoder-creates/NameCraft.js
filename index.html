@@ -1,0 +1,58 @@
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white p-8 pt-16 rounded-lg shadow-lg w-full max-w-2xl relative"> <div class="absolute top-4 left-4">
+            <label for="languageSelector" class="sr-only">Language</label> <select id="languageSelector" class="text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                <option value="en" selected>English</option>
+                <option value="pl">Polski</option>
+            </select>
+        </div>
+
+        <h1 class="text-2xl font-bold text-center text-gray-800 mb-6" data-translate-key="title">NameCraft.js</h1>
+        <p class="text-center text-gray-600 mb-8" data-translate-key="subtitle">Enter a phrase (accents/special chars like 'ł' will be simplified) or edit a generated name below.</p>
+
+        <div class="flex flex-col sm:flex-row gap-4 mb-6">
+            <input
+                type="text"
+                id="inputText"
+                class="flex-grow px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autofocus
+                data-translate-key="inputPlaceholderLoading"
+                placeholder="Loading random words..." />
+            <button
+                id="editInputButton" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold p-3 rounded-md transition duration-200 ease-in-out shadow flex items-center justify-center"
+                data-translate-key="editInputButtonLabel"
+                aria-label="Edit input phrase" >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="flex items-center justify-center gap-4 sm:gap-6 mb-8 flex-wrap" id="formattingOptionsContainer">
+             <span class="text-sm font-medium text-gray-700" data-translate-key="formatLabel">Format:</span>
+             <label class="option-label">
+                <input type="radio" id="formatNone" name="formatting" value="none" class="form-radio" checked>
+                <span data-translate-key="formatNone">None</span>
+            </label>
+            <label class="option-label">
+                <input type="radio" id="formatPrefixDollar" name="formatting" value="dollar" class="form-radio">
+                 <span data-translate-key="formatPrefixDollar">Prefix $</span>
+            </label>
+            <label class="option-label">
+                <input type="radio" id="formatSingleQuotes" name="formatting" value="single" class="form-radio">
+                 <span data-translate-key="formatSingleQuotes">Enclose ' '</span>
+            </label>
+            <label class="option-label">
+                <input type="radio" id="formatDoubleQuotes" name="formatting" value="double" class="form-radio">
+                 <span data-translate-key="formatDoubleQuotes">Enclose " "</span>
+            </label>
+        </div>
+
+
+        <div class="space-y-4" id="outputContainer">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4" data-translate-key="generatedNamesLabel">Generated Names:</h2>
+            </div>
+    </div>
+    <script src="main.js"></script>
+</body>
+</html>
