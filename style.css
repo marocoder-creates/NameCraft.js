@@ -1,0 +1,62 @@
+body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Style for copy feedback */
+        .copied-feedback {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #4CAF50;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            pointer-events: none;
+        }
+        .copied-feedback.show {
+            opacity: 1;
+        }
+        .button-container {
+            position: relative; /* Needed for absolute positioning of feedback */
+            display: flex;      /* Align buttons horizontally */
+            align-items: center;
+        }
+        /* Ensure code tag allows breaking */
+        code {
+            word-break: break-all;
+            display: inline-block; /* Needed for proper focus outline */
+            min-width: 20px; /* Ensure it's clickable even when empty */
+        }
+         /* Style for editable code field */
+        code[contenteditable="true"] {
+            outline: 2px solid #3b82f6; /* Blue outline */
+            background-color: #eff6ff; /* Light blue background */
+            cursor: text;
+            padding: 1px 3px; /* Add padding for better editing feel */
+            margin: -1px -3px; /* Adjust margin to compensate for padding */
+            border-radius: 3px;
+        }
+        /* Hide placeholder text when editing */
+         code[contenteditable="true"]:empty::before {
+            content: ""; /* Or a subtle placeholder like "\feff" (zero-width space) */
+        }
+        /* Styling for radio button group */
+        .option-label { /* Renamed from checkbox-label */
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 0.875rem; /* text-sm */
+            color: #4b5563; /* gray-600 */
+        }
+        .option-label input[type="radio"] { /* Target radio specifically */
+            margin-right: 0.5rem; /* mr-2 */
+            height: 1rem; /* h-4 */
+            width: 1rem; /* w-4 */
+            /* Tailwind form-radio applies default styles */
+            color: #3b82f6; /* text-blue-600 */
+            focus:ring-blue-500;
+        }
